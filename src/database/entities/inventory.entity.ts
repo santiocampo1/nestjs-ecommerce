@@ -19,7 +19,7 @@ export class Inventory {
   @Column({ type: 'int' })
   public productId: number;
 
-  @ManyToOne(() => Product)
+  @ManyToOne(() => Product, { onDelete: 'CASCADE' }) 
   @JoinColumn({ name: 'productId' })
   public product: Product;
 
