@@ -3,33 +3,27 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  JoinColumn,
   PrimaryGeneratedColumn,
   ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
-import { Country } from './country.entity';
-import { ProductVariation } from './productVariation.entity';
+import { Product } from './product.entity';
 
 @Entity()
+@Index(['productId'])
 export class Inventory {
   @PrimaryGeneratedColumn()
   public id!: number;
 
-  @ManyToOne(() => ProductVariation)
-  @JoinColumn({ name: 'productVariationId' })
-  public productVariation: ProductVariation;
-
   @Column({ type: 'int' })
-  public productVariationId: number;
+  public productId: number;
 
-  @ManyToOne(() => Country)
-  @JoinColumn({ name: 'countryCode' })
-  public country: Country;
+  @ManyToOne(() => Product)
+  @JoinColumn({ name: 'productId' })
+  public product: Product;
 
-  @Column({ type: 'varchar', length: 7 })
-  public countryCode: string;
-
-  @Column({ type: 'int' })
+  @Column({ type: 'int', default: 0 })
   public quantity: number;
 
   @CreateDateColumn({ type: 'timestamp' })
