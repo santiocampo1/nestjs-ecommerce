@@ -3,49 +3,69 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DeleteResult, EntityManager } from 'typeorm';
-import { InjectEntityManager } from '@nestjs/typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CreateProductDto, ProductDetailsDto } from '../dto/product.dto';
 import { Category } from '../../../database/entities/category.entity';
 import { Product } from 'src/database/entities/product.entity';
 import { errorMessages } from 'src/errors/custom';
 import { validate } from 'class-validator';
 import { successObject } from 'src/common/helper/sucess-response.interceptor';
+import { ProductCreatedEvent } from '../events/product-created.event';
+import { ProductActivatedEvent } from '../events/product-activated.event';
+import { ProductDeletedEvent } from '../events/product-deleted.event';
 
 @Injectable()
 export class ProductService {
   constructor(
-    @InjectEntityManager()
-    private readonly entityManager: EntityManager,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async getProduct(productId: number) {
-    const product = await this.entityManager.findOne(Product, {
-      where: {
-        id: productId,
-      },
+    const product = await this.productRepository.findOne({
+      where: { id: productId },
+      relations: ['category'],
     });
 
-    if (!product) throw new NotFoundException(errorMessages.product.notFound);
+    if (!product) {
+      throw new NotFoundException(errorMessages.product.notFound);
+    }
 
     return product;
   }
 
   async createProduct(data: CreateProductDto, merchantId: number) {
-    const category = await this.entityManager.findOne(Category, {
-      where: {
-        id: data.categoryId,
-      },
+    const category = await this.categoryRepository.findOne({
+      where: { id: data.categoryId },
     });
 
-    if (!category) throw new NotFoundException(errorMessages.category.notFound);
+    if (!category) {
+      throw new NotFoundException(errorMessages.category.notFound);
+    }
 
-    const product = await this.entityManager.create(Product, {
+    const product = this.productRepository.create({
       category,
       merchantId,
+      categoryId: data.categoryId,
     });
 
-    return this.entityManager.save(product);
+    const savedProduct = await this.productRepository.save(product);
+
+    this.eventEmitter.emit(
+      'product.created',
+      new ProductCreatedEvent(
+        savedProduct.id,
+        savedProduct.merchantId,
+        savedProduct.categoryId,
+      ),
+    );
+
+    return savedProduct;
   }
 
   async addProductDetails(
@@ -53,64 +73,82 @@ export class ProductService {
     body: ProductDetailsDto,
     merchantId: number,
   ) {
-    const result = await this.entityManager
-      .createQueryBuilder()
-      .update<Product>(Product)
-      .set({
-        ...body,
-      })
-      .where('id = :id', { id: productId })
-      .andWhere('merchantId = :merchantId', { merchantId })
-      .returning(['id'])
-      .execute();
-    if (result.affected < 1)
+    const product = await this.productRepository.findOne({
+      where: { id: productId, merchantId },
+    });
+
+    if (!product) {
       throw new NotFoundException(errorMessages.product.notFound);
-    return result.raw[0];
+    }
+
+    Object.assign(product, body);
+    const updatedProduct = await this.productRepository.save(product);
+
+    return {
+      id: updatedProduct.id,
+    };
   }
 
   async activateProduct(productId: number, merchantId: number) {
-    if (!(await this.validate(productId)))
+    const product = await this.productRepository.findOne({
+      where: { id: productId, merchantId },
+    });
+
+    if (!product) {
+      throw new NotFoundException(errorMessages.product.notFound);
+    }
+
+    if (!(await this.validate(productId))) {
       throw new ConflictException(errorMessages.product.notFulfilled);
+    }
 
-    const result = await this.entityManager
-      .createQueryBuilder()
-      .update<Product>(Product)
-      .set({
-        isActive: true,
-      })
-      .where('id = :id', { id: productId })
-      .andWhere('merchantId = :merchantId', { merchantId })
-      .returning(['id', 'isActive'])
-      .execute();
+    product.isActive = true;
+    const activatedProduct = await this.productRepository.save(product);
 
-    return result.raw[0];
+    this.eventEmitter.emit(
+      'product.activated',
+      new ProductActivatedEvent(
+        activatedProduct.id,
+        activatedProduct.merchantId,
+        activatedProduct.code,
+        activatedProduct.title,
+      ),
+    );
+
+    return {
+      id: activatedProduct.id,
+      isActive: activatedProduct.isActive,
+    };
   }
 
   async validate(productId: number) {
-    const product = await this.entityManager.findOne(Product, {
-      where: {
-        id: productId,
-      },
+    const product = await this.productRepository.findOne({
+      where: { id: productId },
     });
-    if (!product) throw new NotFoundException(errorMessages.product.notFound);
+
+    if (!product) {
+      throw new NotFoundException(errorMessages.product.notFound);
+    }
+
     const errors = await validate(product);
-
-    if (errors.length > 0) return false;
-
-    return true;
+    return errors.length === 0;
   }
 
   async deleteProduct(productId: number, merchantId: number) {
-    const result = await this.entityManager
-      .createQueryBuilder()
-      .delete()
-      .from(Product)
-      .where('id = :productId', { productId })
-      .andWhere('merchantId = :merchantId', { merchantId })
-      .execute();
+    const product = await this.productRepository.findOne({
+      where: { id: productId, merchantId },
+    });
 
-    if (result.affected < 1)
+    if (!product) {
       throw new NotFoundException(errorMessages.product.notFound);
+    }
+
+    await this.productRepository.remove(product);
+
+    this.eventEmitter.emit(
+      'product.deleted',
+      new ProductDeletedEvent(productId, merchantId),
+    );
 
     return successObject;
   }

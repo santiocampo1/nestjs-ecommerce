@@ -1,22 +1,22 @@
+import { DataSource, DataSourceOptions } from 'typeorm';
 import { config } from 'dotenv';
-import { resolve } from 'path';
-import { getEnvPath } from '../../common/helper/env.helper';
-import { DataSourceOptions } from 'typeorm';
 
-const envFilePath: string = getEnvPath(
-  resolve(__dirname, '../..', 'common/envs'),
-);
-config({ path: envFilePath });
+const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
+config({ path: envFile });
+
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
-  host: process.env.DATABASE_HOST,
-  port: parseInt(process.env.DATABASE_PORT, 10),
-  database: process.env.DATABASE_NAME,
-  username: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASSWORD,
-  entities: [process.env.DATABASE_ENTITIES],
+  host: process.env.DATABASE_HOST || 'localhost',
+  port: parseInt(process.env.DATABASE_PORT, 10) || 5432,
+  database: process.env.DATABASE_NAME || 'ecommercedb',
+  username: process.env.DATABASE_USER || 'hassan',
+  password: process.env.DATABASE_PASSWORD || 'password',
+  entities: [process.env.DATABASE_ENTITIES || 'dist/**/*.entity.{ts,js}'],
   migrations: ['dist/database/migration/history/*.js'],
   logger: 'simple-console',
-  synchronize: false, // never use TRUE in production!
-  logging: true, // for debugging in dev Area only
+  synchronize: false,
+  logging: process.env.NODE_ENV === 'development',
 };
+
+const dataSource = new DataSource(dataSourceOptions);
+export default dataSource;
