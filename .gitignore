@@ -36,3 +36,9 @@ lerna-debug.log*
 
 #database data
 database-data
+
+# Environment variables
+.env
+.env.test
+.env.local
+.env.*.local

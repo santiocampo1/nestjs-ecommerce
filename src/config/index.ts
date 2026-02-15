@@ -1,12 +1,5 @@
-import { getEnvPath } from 'src/common/helper/env.helper';
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-const envFilePath: string = getEnvPath(resolve(__dirname, '..', 'common/envs'));
-
-config({ path: envFilePath });
-
 export const configuration = () => ({
+  nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 3000,
   baseUrl: process.env.BASE_URL || 'http://localhost:3000',
   database: {
