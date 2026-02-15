@@ -36,3 +36,7 @@ lerna-debug.log*
 
 #database data
 database-data
+
+.env
+.env.test
+*:Zone.Identifier
