@@ -41,6 +41,7 @@ database-data
 .env
 .env.test
 .env.local
+.env.production
 .env.*.local
 
 *:Zone.Identifier
